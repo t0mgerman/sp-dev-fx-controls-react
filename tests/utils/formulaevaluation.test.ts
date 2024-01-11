@@ -125,6 +125,11 @@ describe('Advanced Expression Evaluation', () => {
         const result = evaluate('(cos(1 + 2 * 3) + 3 > 0.5 ? sin(5) : 0) < 0 ? 1 : 0');
         assert.equal(result, 1);
     });
+    it('should evaluate a complex expression with AND OR operators', () => {
+        const context = { emptyStr: '' };
+        const result = evaluate('if([$emptyStr] == "test" || [$emptyStr] == "", true, false)', context);
+        assert.equal(result, true);
+    });
 });
 
 describe('Math Expression Evaluation', () => {

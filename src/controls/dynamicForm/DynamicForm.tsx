@@ -890,6 +890,9 @@ export class DynamicForm extends React.Component<
           value = cur.newValue || cur.value;
           break;
       }
+      // SharePoint OOB allows comparisons that all treat null/undef as empty strings 
+      // so [$someField] == "" evaluates to true where the list value for [$someField] is NULL
+      if (value === undefined || value === null) value = "";
       prev[cur.columnInternalName] = value;
       if (cur.subPropertyValues) {
         Object.keys(cur.subPropertyValues).forEach((key) => {
@@ -1037,6 +1040,7 @@ export class DynamicForm extends React.Component<
 
     for (let i = 0, len = listInfo.ClientForms.Edit[contentTypeName].length; i < len; i++) {
       const field = listInfo.ClientForms.Edit[contentTypeName][i];
+      if (field.Hidden === true) continue;
 
       // Process fields that are not marked as hidden
       if (hiddenFields.indexOf(field.InternalName) < 0) {

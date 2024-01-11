@@ -5,17 +5,17 @@ const operatorTypes = ["+", "-", "*", "/", "==", "!=", "<>", ">", "<", ">=", "<=
 
 /** Each token pattern matches a particular token type. The tokenizer looks for matches in this order. */
 const patterns: [RegExp, TokenType][] = [
-    [/^\[\$?[a-zA-Z_][a-zA-Z_0-9.]*\]/, "VARIABLE"],     // [$variable]
-    [/^@[a-zA-Z_][a-zA-Z_0-9.]*/, "VARIABLE"],           // @variable
-    [/^[0-9]+(?:\.[0-9]+)?/, "NUMBER"],                 // Numeric literals
+    [/^(\[\$?[a-zA-Z_][a-zA-Z_0-9]*\])/, "VARIABLE"],     // [$variable]
+    [/^(@[a-zA-Z_][a-zA-Z_0-9]*)/, "VARIABLE"],           // @variable
+    [/^([0-9]+(?:\.[0-9]+)?)/, "NUMBER"],                 // Numeric literals
     [/^"([^"]*)"/, "STRING"],                           // Match double-quoted strings
     [/^'([^']*)'/, "STRING"],                           // Match single-quoted strings
-    [/^\[[^\]]*\]/, "ARRAY"],                           // Array literals
+    [/^(\[[^\]]*\])/, "ARRAY"],                           // Array literals
     [new RegExp(`^(${ValidFuncNames.join('|')})\\(`), "FUNCTION"], // Functions or other words
     [/^(true|false)/, "BOOLEAN"],                       // Boolean literals
-    [/^\w+/, "WORD"],                                   // Other words, checked against valid variables
-    [/^&&|^\|\||^==|^<>/, "OPERATOR"],                        // Operators and special characters (match double first)
-    [/^[+\-*/<>=%!&|?:,()[\]]/, "OPERATOR"],           // Operators and special characters
+    [/^(\w+)/, "WORD"],                                   // Other words, checked against valid variables
+    [/^(&&|^\|\||^==)/, "OPERATOR"],                        // Operators and special characters (match double first)
+    [/^([+\-*/<>=%!&|?:,()[\]])/, "OPERATOR"],           // Operators and special characters
 ];
 
 export class FormulaEvaluation {
@@ -51,9 +51,10 @@ export class FormulaEvaluation {
             // For each pattern, try to match it from the current position in the expression
             for (const [pattern, tokenType] of patterns) {
                 const regexResult = pattern.exec(expression.slice(i));
-
-                if (regexResult) {
-                    match = regexResult[1] || regexResult[0];
+                match = regexResult && regexResult[1];
+                
+                // eslint-disable-next-line eqeqeq
+                if (match != null) { // checks both null & undefined
 
                     // Unary minus is a special case that we need to 
                     // capture in order to process negative numbers, or 
@@ -85,7 +86,8 @@ export class FormulaEvaluation {
                 }
             }
 
-            if (!match) {
+            // eslint-disable-next-line eqeqeq
+            if (match == null) { // checks both null & undefined
                 // If no patterns matched, move to the next character
                 // console.log(`No match found for character: ${expression[i]}`);
                 i++;
