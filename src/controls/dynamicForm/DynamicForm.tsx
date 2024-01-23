@@ -1196,7 +1196,7 @@ export class DynamicForm extends React.Component<
           hiddenName = field.HiddenListInternalName;
           termSetId = field.TermSetId;
           anchorId = field.AnchorId;
-          if (item !== null) {
+          if (item && item[field.InternalName]) {
             item[field.InternalName].forEach((element) => {
               selectedTags.push({
                 key: element.TermGuid,
@@ -1206,7 +1206,7 @@ export class DynamicForm extends React.Component<
 
             defaultValue = selectedTags;
           } else {
-            if (defaultValue !== null && defaultValue !== "") {
+            if (defaultValue && defaultValue !== "") {
               defaultValue.split(/#|;/).forEach((element) => {
                 if (element.indexOf("|") !== -1)
                   selectedTags.push({

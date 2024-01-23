@@ -5,10 +5,26 @@
 ### Enhancements
 
 - `DyanmicForm`: Added file handling [#1625](https://github.com/pnp/sp-dev-fx-controls-react/pull/1625)
+- `DynamicForm`: Custom Formatting and Validation, ControlsTestWebPart updates [#1672](https://github.com/pnp/sp-dev-fx-controls-react/pull/1672)
+- `PeoplePicker `: Added custom filter to PeoplePicker selection [#1657](https://github.com/pnp/sp-dev-fx-controls-react/issues/1657)
+
+### Fixes
+
+- Build fails due to missing @iconify/react dependency after upgrade to 3.16.0 [#1719](https://github.com/pnp/sp-dev-fx-controls-react/issues/1719)
 
 ### Contributors
 
-Special thanks to our contributor: [Guido Zambarda](https://github.com/GuidoZam).
+Special thanks to our contributors (in alphabetical order): [Guido Zambarda](https://github.com/GuidoZam), [Tom G](https://github.com/t0mgerman).
+
+## 3.16.1
+
+### Fixes
+
+- `DynamicForm`: Additional check to see if DefaultValue is an object. No more null comparisons, which should have been undefined comparisons
+
+### Contributors
+
+Special thanks to our contributor: [IRRDC](https://github.com/IRRDC).
 
 ## 3.16.0
 
