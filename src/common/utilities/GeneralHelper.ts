@@ -332,6 +332,28 @@ export class GeneralHelper {
         };
         return o[c];
     }
+
+    public static flattenObjectWithDelimiter(obj: any, delimiter: string = '.'): any { // eslint-disable-line @typescript-eslint/no-explicit-any
+        const flattenedObject = {};
+
+        function flattenObject(obj: any, prefix: string): void { // eslint-disable-line @typescript-eslint/no-explicit-any
+            const clonedObj = { ...obj };
+            for (const prop in clonedObj) {
+                if (clonedObj[prop]) {
+                    if (typeof clonedObj[prop] === 'object' && clonedObj[prop] !== null) {
+                        flattenObject(clonedObj[prop], prefix + prop + delimiter);
+                    }
+                    else {
+                        flattenedObject[prefix + prop] = clonedObj[prop];
+                    }
+                }
+            }
+        }
+
+        flattenObject(obj, '');
+
+        return flattenedObject;
+    }
 }
 
 export function urlCombine(urlStart: string, urlFinish: string, escapeFinish: boolean = true): string {

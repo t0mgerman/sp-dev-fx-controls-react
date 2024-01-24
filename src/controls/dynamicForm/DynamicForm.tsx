@@ -45,6 +45,7 @@ import CustomFormattingHelper from "../../common/utilities/CustomFormatting";
 // Dynamic Form Props / State
 import { IDynamicFormProps } from "./IDynamicFormProps";
 import { IDynamicFormState } from "./IDynamicFormState";
+import { GeneralHelper } from "../../Utilities";
 
 const stackTokens: IStackTokens = { childrenGap: 20 };
 
@@ -712,69 +713,83 @@ export class DynamicForm extends React.Component<
 
     // Init new value(s)
     field.newValue = newValue;
-    field.stringValue = newValue.toString();
+    field.stringValue = newValue?.toString() || "";
     field.additionalData = additionalData;
     field.subPropertyValues = {};
 
-    // Store string values for various field types
+    if (newValue !== null && newValue !== undefined) {
 
-    if (field.fieldType === "Choice") {
-      field.stringValue = newValue.text;
-    }
-    if (field.fieldType === "MultiChoice") {
-      field.stringValue = newValue.join(';#');
-    }
-    if (field.fieldType === "Lookup" || field.fieldType === "LookupMulti") {
-      field.stringValue = newValue.map(nv => nv.key + ';#' + nv.name).join(';#');
-    }
-    if (field.fieldType === "TaxonomyFieldType" || field.fieldType === "TaxonomyFieldTypeMulti") {
-      field.stringValue = newValue.map(nv => nv.name).join(';');
-    }
-
-    // Capture additional property data for User fields
-
-    if (field.fieldType === "User" && newValue.length !== 0) {
-      if (
-        newValue[0].id === undefined ||
-        parseInt(newValue[0].id, 10).toString() === "NaN"
-      ) {
-        let user: string = newValue[0].secondaryText;
-        if (user.indexOf("@") === -1) {
-          user = newValue[0].loginName;
+        // Store string values for various field types
+    
+        if (field.fieldType === "Choice") {
+          field.stringValue = newValue.text;
         }
-        const result = await sp.web.ensureUser(user);
-        field.newValue = result.data.Id; // eslint-disable-line require-atomic-updates
-        field.stringValue = user;
-        field.subPropertyValues = {
-          id: result.data.Id,
-          title: result.data.Title,
-          email: result.data.Email,
-        };
-      } else {
-        field.newValue = newValue[0].id;
-      }
-    }
-    if (field.fieldType === "UserMulti" && newValue.length !== 0) {
-      field.newValue = [];
-      const emails: string[] = [];
-      for (let index = 0; index < newValue.length; index++) {
-        const element = newValue[index];
-        if (
-          element.id === undefined ||
-          parseInt(element.id, 10).toString() === "NaN"
-        ) {
-          let user: string = element.secondaryText;
-          if (user.indexOf("@") === -1) {
-            user = element.loginName;
+        if (field.fieldType === "MultiChoice") {
+          field.stringValue = newValue.join(';#');
+        }
+        if (field.fieldType === "Lookup" || field.fieldType === "LookupMulti") {
+          field.stringValue = newValue.map(nv => nv.key + ';#' + nv.name).join(';#');
+        }
+        if (field.fieldType === "Hyperlink") {
+          field.stringValue = `${newValue.Url}, ${newValue.Description}`;
+        }
+        if (field.fieldType === "Image") {
+          field.subPropertyValues.fileName = GeneralHelper.getFileNameFromUrl(newValue);
+        }
+        if (field.fieldType === "Location") {
+          field.stringValue = JSON.stringify(newValue);
+          field.subPropertyValues = newValue;
+        }
+        if (field.fieldType === "TaxonomyFieldType" || field.fieldType === "TaxonomyFieldTypeMulti") {
+          field.stringValue = newValue.map(nv => `${nv.name}|${nv.key}`).join(';');
+        }
+    
+        // Capture additional property data for User fields
+    
+        if (field.fieldType === "User" && newValue.length !== 0) {
+          if (
+            newValue[0].id === undefined ||
+            parseInt(newValue[0].id, 10).toString() === "NaN"
+          ) {
+            let user: string = newValue[0].secondaryText;
+            if (user.indexOf("@") === -1) {
+              user = newValue[0].loginName;
+            }
+            const result = await sp.web.ensureUser(user);
+            field.newValue = result.data.Id; // eslint-disable-line require-atomic-updates
+            field.stringValue = user;
+            field.subPropertyValues = {
+              id: result.data.Id,
+              title: result.data.Title,
+              email: result.data.Email,
+            };
+          } else {
+            field.newValue = newValue[0].id;
           }
-          const result = await sp.web.ensureUser(user);
-          field.newValue.push(result.data.Id);
-          emails.push(user);
-        } else {
-          field.newValue.push(element.id);
         }
-      }
-      field.stringValue = emails.join(";");
+        if (field.fieldType === "UserMulti" && newValue.length !== 0) {
+          field.newValue = [];
+          const emails: string[] = [];
+          for (let index = 0; index < newValue.length; index++) {
+            const element = newValue[index];
+            if (
+              element.id === undefined ||
+              parseInt(element.id, 10).toString() === "NaN"
+            ) {
+              let user: string = element.secondaryText;
+              if (user.indexOf("@") === -1) {
+                user = element.loginName;
+              }
+              const result = await sp.web.ensureUser(user);
+              field.newValue.push(result.data.Id);
+              emails.push(user);
+            } else {
+              field.newValue.push(element.id);
+            }
+          }
+          field.stringValue = emails.join(";");
+        }
+
     }
 
     const validationErrors = {...this.state.validationErrors};
@@ -871,6 +886,7 @@ export class DynamicForm extends React.Component<
         case "TaxonomyFieldType":
         case "LookupMulti":
         case "MultiChoice":
+        case "Location":
         case "TaxonomyFieldTypeMulti":
         case "User":
         case "UserMulti":
@@ -895,8 +911,9 @@ export class DynamicForm extends React.Component<
       if (value === undefined || value === null) value = "";
       prev[cur.columnInternalName] = value;
       if (cur.subPropertyValues) {
-        Object.keys(cur.subPropertyValues).forEach((key) => {
-          prev[`${cur.columnInternalName}.${key}`] = cur.subPropertyValues[key];
+        const flattenedValues = GeneralHelper.flattenObjectWithDelimiter(cur.subPropertyValues, ".");
+        Object.keys(flattenedValues).forEach((key) => {
+          prev[`${cur.columnInternalName}.${key}`] = flattenedValues[key];
         });
       }
       return prev;
@@ -961,7 +978,7 @@ export class DynamicForm extends React.Component<
       let bodySections: ICustomFormattingBodySection[];
       if (listInfo.ClientFormCustomFormatter && listInfo.ClientFormCustomFormatter[contentTypeId]) {
         const customFormatInfo = JSON.parse(listInfo.ClientFormCustomFormatter[contentTypeId]) as ICustomFormatting;
-        bodySections = customFormatInfo.bodyJSONFormatter.sections;
+        bodySections = customFormatInfo.bodyJSONFormatter?.sections;
         headerJSON = customFormatInfo.headerJSONFormatter;
         footerJSON = customFormatInfo.footerJSONFormatter;
       }
