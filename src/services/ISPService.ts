@@ -265,7 +265,7 @@ export interface ISPService {
      * Get additional form rendering and validation information for a SharePoint list.
      * Captures information not returned by RenderListDataAsStream with RenderOptions = 64
      */
-    getAdditionalListFormFieldInfo(listId: string, webUrl?: string): Promise<ISPField[]>;
+    getAdditionalListFormFieldInfo(listId: string, contentTypeId: string, webUrl?: string): Promise<ISPField[]>;
 
     /**
      *  Get the views from lists or libraries

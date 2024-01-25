@@ -761,10 +761,10 @@ export default class SPService implements ISPService {
    * Get additional form rendering and validation information for a SharePoint list.
    * Captures information not returned by RenderListDataAsStream with RenderOptions = 64
    */
-  async getAdditionalListFormFieldInfo(listId: string, webUrl?: string): Promise<ISPField[]> {
+  async getAdditionalListFormFieldInfo(listId: string, contentTypeId: string, webUrl?: string): Promise<ISPField[]> {
     try {
       const webAbsoluteUrl = !webUrl ? this._context.pageContext.web.absoluteUrl : webUrl;
-      const apiRequestPath = `/_api/web/lists(guid'${listId}')/Fields?$filter=TypeAsString eq 'Number' or TypeAsString eq 'Currency' or ValidationFormula ne null`;
+      const apiRequestPath = `/_api/web/lists(guid'${listId}')/contentTypes('${contentTypeId}')/Fields?$filter=Hidden eq true or TypeAsString eq 'Number' or TypeAsString eq 'Currency' or ValidationFormula ne null`;
 
       const apiUrl = urlCombine(webAbsoluteUrl, apiRequestPath, false);
       const response = await this._context.spHttpClient.get(apiUrl, SPHttpClient.configurations.v1);

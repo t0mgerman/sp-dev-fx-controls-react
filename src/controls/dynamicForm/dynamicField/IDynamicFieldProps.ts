@@ -26,6 +26,9 @@ export interface IDynamicFieldProps {
   
   /** Specifies if a field should be disabled */
   disabled?: boolean;
+
+  /** True if the field is hidden in the current content type */
+  isHidden?: boolean;
   
   /** List Item Id, passed to various utility/helper functions to determine things like selected User UPN, Lookup text, Term labels etc. */
   listItemId?: number;

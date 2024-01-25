@@ -13,7 +13,7 @@ export default class SPServiceMock implements ISPService {
   public getListFormRenderInfo(listId: string): Promise<IRenderListDataAsStreamClientFormResult> {
     throw new Error("Method not implemented.");
   }
-  public getAdditionalListFormFieldInfo(listId: string, webUrl?: string): Promise<ISPField[]> {
+  public getAdditionalListFormFieldInfo(listId: string, contentTypeId: string, webUrl?: string): Promise<ISPField[]> {
     throw new Error("Method not implemented.");
   }
   public getFields(options?: IFieldsOptions): Promise<ISPField[]> {

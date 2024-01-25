@@ -58,6 +58,7 @@ export interface ISPField {
     ResultType?: string;
     ValidationFormula?: string;
     ValidationMessage?: string;
+    DefaultValue?: string;
     MinimumValue?: number;
     MaximumValue?: number;
     CurrencyLocaleId?: number;

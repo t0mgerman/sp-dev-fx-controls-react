@@ -20,16 +20,21 @@ export type ControlVisibility = {
   [K in ValidControls]: boolean;
 }
 
+export interface IDynamicFormSettings {
+  listId: string;
+  contentTypeId: string;
+  listItemId: string;
+  errorDialogEnabled: boolean;
+  customFormattingEnabled: boolean;
+  clientSideValidationEnabled: boolean;
+  fieldValidationEnabled: boolean;
+  fileSelectionEnabled: boolean;
+}
+
 export interface IControlsTestWebPartProps {
   title: string;
   description: string;
   paginationTotalPages: number;
-  dynamicFormListId: string;
-  dynamicFormListItemId: string;
-  dynamicFormErrorDialogEnabled: boolean;
-  dynamicFormCustomFormattingEnabled: boolean;
-  dynamicFormClientSideValidationEnabled: boolean;
-  dynamicFormFieldValidationEnabled: boolean;
-  dynamicFormFileSelectionEnabled: boolean;
+  dynamicFormSettings: IDynamicFormSettings;
   controlVisibility: ControlVisibility
 }

@@ -22,12 +22,29 @@ export class ControlToggles extends React.Component<IControlTogglesProps, IContr
     }
 
     public render(): JSX.Element {
+        const controls = this.getValidControls();
+        controls.sort((a, b) => {
+            if (this.props.controlVisibility) {
+                if (this.props.controlVisibility[a] === true &&
+                    this.props.controlVisibility[b] === false) {
+                        return -1;
+                } else if (this.props.controlVisibility[a] === false &&
+                    this.props.controlVisibility[b] === true) {
+                        return 1;
+                } else {
+                    return 0;
+                }
+            } else {
+                return 0;
+            }
+        });
+
         return (
             <div>
                 <TextField label="Search" placeholder="Search Controls" onChange={(e: React.FormEvent<HTMLInputElement | HTMLTextAreaElement>, newValue?: string) => {
                     this.setState({ filter: newValue });
                 }} />
-                { this.getValidControls().map((control: string) => {
+                { controls.map((control: string) => {
                     if (this.state && this.state.filter && this.state.filter.length > 0 && control.toLowerCase().indexOf(this.state.filter.toLowerCase()) === -1) {
                         return null;
                     }

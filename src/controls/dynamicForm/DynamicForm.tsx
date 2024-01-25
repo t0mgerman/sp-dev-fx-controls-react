@@ -203,21 +203,31 @@ export class DynamicForm extends React.Component<
               contentTypeId.startsWith("0x0101") &&
               this.renderFileSelectionControl()}
             {(bodySections.length > 0 && !customFormattingDisabled) && bodySections
-              .filter(bs => bs.fields.filter(bsf => hiddenByFormula.indexOf(bsf) < 0).length > 0)
+              .filter(bs => bs.fields.filter(bsf => {
+                const field = fieldCollection.find(fc => fc.label === bsf) as IDynamicFieldProps;
+                return hiddenByFormula.indexOf(bsf) < 0 && !field.isHidden;
+              }).length > 0)
               .map((section, i) => (
               <>
                 <h2 className={styles.sectionTitle}>{section.displayname}</h2>
                 <div className={styles.sectionFormFields}>
-                  {section.fields.map((f, i) => (
-                    <div key={f} className={styles.sectionFormField}>
-                      {this.renderField(fieldCollection.find(fc => fc.label === f) as IDynamicFieldProps)}
-                    </div>
-                  ))}
+                  {section.fields.map((f, i) => {
+                    const field = fieldCollection.find(fc => fc.label === f) as IDynamicFieldProps;
+                    if (field.isHidden || hiddenByFormula.indexOf(f) > -1) return null;
+                    return (
+                      <div key={f} className={styles.sectionFormField}>
+                        {this.renderField(fieldCollection.find(fc => fc.label === f) as IDynamicFieldProps)}
+                      </div>
+                    );
+                  })}
                 </div>
                 {i < bodySections.length - 1 && <hr className={styles.sectionLine} aria-hidden={true} />}
               </>
             ))}
-            {(bodySections.length === 0 || customFormattingDisabled) && fieldCollection.map((f, i) => this.renderField(f))}
+            {(bodySections.length === 0 || customFormattingDisabled) && fieldCollection.map((field, i) => {
+              if (field.isHidden || hiddenByFormula.indexOf(field.columnInternalName) > -1) return null;
+              return this.renderField(field);
+            })}
             {footerContent}
             {!this.props.disabled && (
               <Stack className={styles.buttons} horizontal tokens={stackTokens}>
@@ -721,32 +731,32 @@ export class DynamicForm extends React.Component<
 
         // Store string values for various field types
     
-        if (field.fieldType === "Choice") {
+        if (field.fieldType === "Choice" && typeof field.newValue === "object") {
           field.stringValue = newValue.text;
         }
-        if (field.fieldType === "MultiChoice") {
+        if (field.fieldType === "MultiChoice" && Array.isArray(field.newValue)) {
           field.stringValue = newValue.join(';#');
         }
-        if (field.fieldType === "Lookup" || field.fieldType === "LookupMulti") {
+        if ((field.fieldType === "Lookup" || field.fieldType === "LookupMulti") && Array.isArray(newValue)) {
           field.stringValue = newValue.map(nv => nv.key + ';#' + nv.name).join(';#');
         }
-        if (field.fieldType === "Hyperlink") {
+        if (field.fieldType === "Hyperlink" && typeof newValue === "object") {
           field.stringValue = `${newValue.Url}, ${newValue.Description}`;
         }
         if (field.fieldType === "Image") {
           field.subPropertyValues.fileName = GeneralHelper.getFileNameFromUrl(newValue);
         }
-        if (field.fieldType === "Location") {
+        if (field.fieldType === "Location" && typeof newValue === "object") {
           field.stringValue = JSON.stringify(newValue);
           field.subPropertyValues = newValue;
         }
-        if (field.fieldType === "TaxonomyFieldType" || field.fieldType === "TaxonomyFieldTypeMulti") {
+        if ((field.fieldType === "TaxonomyFieldType" || field.fieldType === "TaxonomyFieldTypeMulti") && Array.isArray(newValue)) {
           field.stringValue = newValue.map(nv => `${nv.name}|${nv.key}`).join(';');
         }
     
         // Capture additional property data for User fields
     
-        if (field.fieldType === "User" && newValue.length !== 0) {
+        if (field.fieldType === "User" && Array.isArray(newValue) && newValue.length !== 0) {
           if (
             newValue[0].id === undefined ||
             parseInt(newValue[0].id, 10).toString() === "NaN"
@@ -767,7 +777,7 @@ export class DynamicForm extends React.Component<
             field.newValue = newValue[0].id;
           }
         }
-        if (field.fieldType === "UserMulti" && newValue.length !== 0) {
+        if (field.fieldType === "UserMulti" && Array.isArray(newValue) && newValue.length !== 0) {
           field.newValue = [];
           const emails: string[] = [];
           for (let index = 0; index < newValue.length; index++) {
@@ -938,9 +948,15 @@ export class DynamicForm extends React.Component<
       // Fetch form rendering information from SharePoint
       const listInfo = await this._spService.getListFormRenderInfo(listId);
 
+      // If no content type ID is provided, use the default (first one in the list)
+      if (contentTypeId === undefined || contentTypeId === "") {
+        contentTypeId = Object.keys(listInfo.ContentTypeIdToNameMap)[0];
+      }
+      const contentTypeName: string = listInfo.ContentTypeIdToNameMap[contentTypeId];
+
       // Fetch additional information about fields from SharePoint
+      const additionalInfo = await this._spService.getAdditionalListFormFieldInfo(listId, contentTypeId);
       // (Number fields for min and max values, and fields with validation)
-      const additionalInfo = await this._spService.getAdditionalListFormFieldInfo(listId);
       const numberFields = additionalInfo.filter((f) => f.TypeAsString === "Number" || f.TypeAsString === "Currency");
 
       // Build a dictionary of validation formulas and messages
@@ -954,11 +970,39 @@ export class DynamicForm extends React.Component<
         return prev;
       }, {});
 
-      // If no content type ID is provided, use the default (first one in the list)
-      if (contentTypeId === undefined || contentTypeId === "") {
-        contentTypeId = Object.keys(listInfo.ContentTypeIdToNameMap)[0];
-      }
-      const contentTypeName: string = listInfo.ContentTypeIdToNameMap[contentTypeId];
+      // RenderListDataAsStream doesn't bring back defaultValue information for fields hidden on content-types
+      const hiddenByContentType = additionalInfo.filter(f => f.Hidden === true);
+      listInfo.ClientForms.Edit[contentTypeName].filter(f => f.Hidden === true).forEach((field) => {
+        const fieldMissingData = hiddenByContentType.find(f => f.InternalName === field.InternalName);
+        if (fieldMissingData) {
+          
+          if (fieldMissingData.TypeAsString === "Number") {
+            field.DefaultValue = Number(fieldMissingData.DefaultValue);
+          } else if (fieldMissingData.TypeAsString === "DateTime") {
+            if (fieldMissingData.DefaultValue?.toLowerCase() === "[today]") {
+              field.DefaultValue = new Date();
+            // eslint-disable-next-line eqeqeq
+            } else if (fieldMissingData.DefaultValue != null) {
+              field.DefaultValue = new Date(fieldMissingData.DefaultValue);
+            }
+          } else if (fieldMissingData.TypeAsString === "Thumbnail") {
+            if (fieldMissingData.DefaultValue) {
+              field.DefaultValue = JSON.parse(fieldMissingData.DefaultValue).serverRelativeUrl;
+            }
+          } else if (fieldMissingData.TypeAsString === "Location") {
+            if (fieldMissingData.DefaultValue) {
+              field.DefaultValue = JSON.parse(fieldMissingData.DefaultValue);
+            }
+          } else if (fieldMissingData.TypeAsString === "Boolean") {
+            // eslint-disable-next-line eqeqeq
+            if (fieldMissingData.DefaultValue != null) {
+              field.DefaultValue = Boolean(Number(fieldMissingData.DefaultValue));
+            }
+          }  else {
+            field.DefaultValue = fieldMissingData.DefaultValue;
+          }
+        } 
+      });
 
       // Build a dictionary of client validation formulas and messages
       // These are formulas that are added in Edit Form > Edit Columns > Edit Conditional Formula
@@ -1028,7 +1072,21 @@ export class DynamicForm extends React.Component<
         fieldCollection: tempFields,
         installedLanguages,
         validationFormulas
-      }, () => this.performValidation(true));
+      }, async () => {
+        // For fields that are hidden and have a default value, trigger
+        // onChange so stringValue is set for the validator
+        const onChangeEvents: Promise<void>[] = [];
+        listInfo.ClientForms.Edit[contentTypeName].filter(field => 
+          // eslint-disable-next-line eqeqeq
+          field.Hidden === true && field.DefaultValue != null
+        ).forEach(field => {
+          onChangeEvents.push(this.onChange(field.InternalName, field.DefaultValue, false));
+        });
+      
+        await Promise.all(onChangeEvents).then(() => {
+          this.performValidation(true);
+        });
+      });
 
     } catch (error) {
       this.updateFormMessages(MessageBarType.error, 'An error occurred while loading: ' + error.message);
@@ -1057,261 +1115,261 @@ export class DynamicForm extends React.Component<
 
     for (let i = 0, len = listInfo.ClientForms.Edit[contentTypeName].length; i < len; i++) {
       const field = listInfo.ClientForms.Edit[contentTypeName][i];
-      if (field.Hidden === true) continue;
 
       // Process fields that are not marked as hidden
-      if (hiddenFields.indexOf(field.InternalName) < 0) {
-        order++;
-        let hiddenName = "";
-        let termSetId = "";
-        let anchorId = "";
-        let lookupListId = "";
-        let lookupField = "";
-        const choices: IDropdownOption[] = [];
-        let defaultValue = null;
-        let value = undefined;
-        let stringValue = null;
-        const subPropertyValues: Record<string, unknown> = {};
-        let richText = false;
-        let dateFormat: DateFormat | undefined;
-        let principalType = "";
-        let cultureName: string;
-        let minValue: number | undefined;
-        let maxValue: number | undefined;
-        let showAsPercentage: boolean | undefined;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const selectedTags: any = [];
+      order++;
+      let hiddenName = "";
+      let termSetId = "";
+      let anchorId = "";
+      let lookupListId = "";
+      let lookupField = "";
+      const choices: IDropdownOption[] = [];
+      let defaultValue = null;
+      let value = undefined;
+      let stringValue = null;
+      const subPropertyValues: Record<string, unknown> = {};
+      let richText = false;
+      let dateFormat: DateFormat | undefined;
+      let principalType = "";
+      let cultureName: string;
+      let minValue: number | undefined;
+      let maxValue: number | undefined;
+      let showAsPercentage: boolean | undefined;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const selectedTags: any = [];
 
-        // If a SharePoint Item was loaded, get the field value from it
-        if (item !== null && item[field.InternalName]) {
-          value = item[field.InternalName];
-          stringValue = value.toString();
+      // If a SharePoint Item was loaded, get the field value from it
+      if (item !== null && item[field.InternalName]) {
+        value = item[field.InternalName];
+        stringValue = value.toString();
+      } else {
+        defaultValue = field.DefaultValue;  
+      }
+
+      // Store choices for Choice fields
+      if (field.FieldType === "Choice") {
+        field.Choices?.forEach((element) => {
+          choices.push({ key: element, text: element });
+        });
+      }
+      if (field.FieldType === "MultiChoice") {
+        field.MultiChoices?.forEach((element) => {
+          choices.push({ key: element, text: element });
+        });
+      }
+
+      // Setup Note, Number and Currency fields
+      if (field.FieldType === "Note") {
+        richText = field.RichText;
+      }
+      if (field.FieldType === "Number" || field.FieldType === "Currency") {
+        const numberField = numberFields.find(f => f.InternalName === field.InternalName);
+        if (numberField) {
+          minValue = numberField.MinimumValue;
+          maxValue = numberField.MaximumValue;
+        }
+        showAsPercentage = field.ShowAsPercentage;
+        if (field.FieldType === "Currency") {
+          cultureName = this.cultureNameLookup(numberField.CurrencyLocaleId);
+        }
+      }
+
+      // Setup Lookup fields
+      if (field.FieldType === "Lookup" || field.FieldType === "LookupMulti") {
+        lookupListId = field.LookupListId;
+        lookupField = field.LookupFieldName;
+        if (item !== null) {
+          value = await this._spService.getLookupValues(
+            listId,
+            listItemId,
+            field.InternalName,
+            lookupField,
+            this.webURL
+          );
+          stringValue = value?.map(dv => dv.key + ';#' + dv.name).join(';#');
+          if (item[field.InternalName + "Id"]) {
+            subPropertyValues.id = item[field.InternalName + "Id"];
+            subPropertyValues.lookupId = subPropertyValues.id;
+          }
+          subPropertyValues.lookupValue = value?.map(dv => dv.name);
         } else {
-          defaultValue = field.DefaultValue;
+          value = [];
         }
+      }
 
-        // Store choices for Choice fields
-        if (field.FieldType === "Choice") {
-          field.Choices.forEach((element) => {
-            choices.push({ key: element, text: element });
-          });
-        }
-        if (field.FieldType === "MultiChoice") {
-          field.MultiChoices.forEach((element) => {
-            choices.push({ key: element, text: element });
-          });
-        }
-
-        // Setup Note, Number and Currency fields
-        if (field.FieldType === "Note") {
-          richText = field.RichText;
-        }
-        if (field.FieldType === "Number" || field.FieldType === "Currency") {
-          const numberField = numberFields.find(f => f.InternalName === field.InternalName);
-          if (numberField) {
-            minValue = numberField.MinimumValue;
-            maxValue = numberField.MaximumValue;
-          }
-          showAsPercentage = field.ShowAsPercentage;
-          if (field.FieldType === "Currency") {
-            cultureName = this.cultureNameLookup(numberField.CurrencyLocaleId);
-          }
-        }
-
-        // Setup Lookup fields
-        if (field.FieldType === "Lookup" || field.FieldType === "LookupMulti") {
-          lookupListId = field.LookupListId;
-          lookupField = field.LookupFieldName;
-          if (item !== null) {
-            value = await this._spService.getLookupValues(
-              listId,
-              listItemId,
-              field.InternalName,
-              lookupField,
-              this.webURL
-            );
-            stringValue = value?.map(dv => dv.key + ';#' + dv.name).join(';#');
-            if (item[field.InternalName + "Id"]) {
-              subPropertyValues.id = item[field.InternalName + "Id"];
-              subPropertyValues.lookupId = subPropertyValues.id;
-            }
-            subPropertyValues.lookupValue = value?.map(dv => dv.name);
-          } else {
-            value = [];
-          }
-        }
-
-        // Setup User fields
-        if (field.FieldType === "User") {
-          if (item !== null) {
-            const userEmails: string[] = [];
-            userEmails.push(
-              (await this._spService.getUserUPNFromFieldValue(
-                listId,
-                listItemId,
-                field.InternalName,
-                this.webURL
-              )) + ""
-            );
-            value = userEmails;
-            stringValue = userEmails?.map(dv => dv.split('/').shift()).join(';');
-            if (item[field.InternalName + "Id"]) {
-              subPropertyValues.id = item[field.InternalName + "Id"];
-            }
-            subPropertyValues.title = userEmails?.map(dv => dv.split('/').pop())[0];
-            subPropertyValues.email = userEmails[0];
-          } else {
-            value = [];
-          }
-          principalType = field.PrincipalAccountType;
-        }
-        if (field.FieldType === "UserMulti") {
-          if (item !== null) {
-            value = await this._spService.getUsersUPNFromFieldValue(
+      // Setup User fields
+      if (field.FieldType === "User") {
+        if (item !== null) {
+          const userEmails: string[] = [];
+          userEmails.push(
+            (await this._spService.getUserUPNFromFieldValue(
               listId,
               listItemId,
               field.InternalName,
               this.webURL
-            );
-            stringValue = value?.map(dv => dv.split('/').pop()).join(';');
-          } else {
-            value = [];
+            )) + ""
+          );
+          value = userEmails;
+          stringValue = userEmails?.map(dv => dv.split('/').shift()).join(';');
+          if (item[field.InternalName + "Id"]) {
+            subPropertyValues.id = item[field.InternalName + "Id"];
           }
-          principalType = field.PrincipalAccountType;
+          subPropertyValues.title = userEmails?.map(dv => dv.split('/').pop())[0];
+          subPropertyValues.email = userEmails[0];
+        } else {
+          value = [];
         }
+        principalType = field.PrincipalAccountType;
+      }
+      if (field.FieldType === "UserMulti") {
+        if (item !== null) {
+          value = await this._spService.getUsersUPNFromFieldValue(
+            listId,
+            listItemId,
+            field.InternalName,
+            this.webURL
+          );
+          stringValue = value?.map(dv => dv.split('/').pop()).join(';');
+        } else {
+          value = [];
+        }
+        principalType = field.PrincipalAccountType;
+      }
 
-        // Setup Taxonomy / Metadata fields
-        if (field.FieldType === "TaxonomyFieldType") {
-          termSetId = field.TermSetId;
-          anchorId = field.AnchorId;
-          if (item !== null) {
-            const response = await this._spService.getSingleManagedMetadataLabel(
-              listId,
-              listItemId,
-              field.InternalName
-            );
-            if (response) {
-              selectedTags.push({
-                key: response.TermID,
-                name: response.Label,
-              });
-              value = selectedTags;
-              stringValue = selectedTags?.map(dv => dv.key + ';#' + dv.name).join(';#');
-            }
-          } else {
-            if (defaultValue !== "") {
-              selectedTags.push({
-                key: defaultValue.split("|")[1],
-                name: defaultValue.split("|")[0].split("#")[1],
-              });
-              value = selectedTags;
-            }
+      // Setup Taxonomy / Metadata fields
+      if (field.FieldType === "TaxonomyFieldType") {
+        termSetId = field.TermSetId;
+        anchorId = field.AnchorId;
+        if (item !== null) {
+          const response = await this._spService.getSingleManagedMetadataLabel(
+            listId,
+            listItemId,
+            field.InternalName
+          );
+          if (response) {
+            selectedTags.push({
+              key: response.TermID,
+              name: response.Label,
+            });
+            value = selectedTags;
+            stringValue = selectedTags?.map(dv => dv.key + ';#' + dv.name).join(';#');
           }
-          if (defaultValue === "") defaultValue = null;
+        } else {
+          if (defaultValue !== "") {
+            selectedTags.push({
+              key: defaultValue.split("|")[1],
+              name: defaultValue.split("|")[0].split("#")[1],
+            });
+            value = selectedTags;
+          }
         }
-        if (field.FieldType === "TaxonomyFieldTypeMulti") {
-          hiddenName = field.HiddenListInternalName;
-          termSetId = field.TermSetId;
-          anchorId = field.AnchorId;
-          if (item && item[field.InternalName]) {
-            item[field.InternalName].forEach((element) => {
-              selectedTags.push({
-                key: element.TermGuid,
-                name: element.Label,
-              });
+        if (defaultValue === "") defaultValue = null;
+      }
+      if (field.FieldType === "TaxonomyFieldTypeMulti") {
+        hiddenName = field.HiddenListInternalName;
+        termSetId = field.TermSetId;
+        anchorId = field.AnchorId;
+        if (item && item[field.InternalName]) {
+          item[field.InternalName].forEach((element) => {
+            selectedTags.push({
+              key: element.TermGuid,
+              name: element.Label,
+            });
+          });
+
+          defaultValue = selectedTags;
+        } else {
+          if (defaultValue && defaultValue !== "") {
+            defaultValue.split(/#|;/).forEach((element) => {
+              if (element.indexOf("|") !== -1)
+                selectedTags.push({
+                  key: element.split("|")[1],
+                  name: element.split("|")[0],
+                });
             });
 
-            defaultValue = selectedTags;
-          } else {
-            if (defaultValue && defaultValue !== "") {
-              defaultValue.split(/#|;/).forEach((element) => {
-                if (element.indexOf("|") !== -1)
-                  selectedTags.push({
-                    key: element.split("|")[1],
-                    name: element.split("|")[0],
-                  });
-              });
-
-              value = selectedTags;
-              stringValue = selectedTags?.map(dv => dv.key + ';#' + dv.name).join(';#');
-            }
-          }
-          if (defaultValue === "") defaultValue = null;
-        }
-
-        // Setup DateTime fields
-        if (field.FieldType === "DateTime") {
-          if (item !== null && item[field.InternalName]) {
-            value = new Date(item[field.InternalName]);
-            stringValue = value.toISOString();
-          } else if (defaultValue === "[today]") {
-            defaultValue = new Date();
-          } else if (defaultValue) {
-            defaultValue = new Date(defaultValue);
-          }
-
-          dateFormat = field.DateFormat || "DateOnly";
-          defaultDayOfWeek = (await this._spService.getRegionalWebSettings()).FirstDayOfWeek;
-        }
-
-        // Setup Thumbnail, Location and Boolean fields
-        if (field.FieldType === "Thumbnail") {
-          if (defaultValue) {
-            defaultValue = JSON.parse(defaultValue).serverRelativeUrl;
-          }
-          if (value) {
-            value = JSON.parse(value).serverRelativeUrl;
+            value = selectedTags;
+            stringValue = selectedTags?.map(dv => dv.key + ';#' + dv.name).join(';#');
           }
         }
-        if (field.FieldType === "Location") {
-          if (defaultValue) defaultValue = JSON.parse(defaultValue);
-          if (value) value = JSON.parse(value);
-        }
-        if (field.FieldType === "Boolean") {
-          if (defaultValue !== undefined && defaultValue !== null) defaultValue = Boolean(Number(defaultValue));
-          if (value !== undefined && value !== null) value = Boolean(Number(value));
-        }
-
-        tempFields.push({
-          value,
-          newValue: undefined,
-          stringValue,
-          subPropertyValues,
-          cultureName,
-          fieldTermSetId: termSetId,
-          fieldAnchorId: anchorId,
-          options: choices,
-          lookupListID: lookupListId,
-          lookupField: lookupField,
-          // changedValue: defaultValue,
-          fieldType: field.FieldType,
-          // fieldTitle: field.Title,
-          defaultValue: defaultValue,
-          context: this.props.context,
-          disabled: this.props.disabled ||
-            (disabledFields &&
-              disabledFields.indexOf(field.InternalName) > -1),
-          // listId: this.props.listId,
-          columnInternalName: field.InternalName,
-          label: field.Title,
-          onChanged: this.onChange,
-          required: field.Required,
-          hiddenFieldName: hiddenName,
-          Order: order,
-          isRichText: richText,
-          dateFormat: dateFormat,
-          firstDayOfWeek: defaultDayOfWeek,
-          listItemId: listItemId,
-          principalType: principalType,
-          description: field.Description,
-          minimumValue: minValue,
-          maximumValue: maxValue,
-          showAsPercentage: showAsPercentage,
-        });
-
-        // This may not be necessary now using RenderListDataAsStream
-        tempFields.sort((a, b) => a.Order - b.Order);
+        if (defaultValue === "") defaultValue = null;
       }
+
+      // Setup DateTime fields
+      if (field.FieldType === "DateTime") {
+        if (item !== null && item[field.InternalName]) {
+          value = new Date(item[field.InternalName]);
+          stringValue = value.toISOString();
+        } else if (defaultValue === "[today]") {
+          defaultValue = new Date();
+        } else if (defaultValue) {
+          defaultValue = new Date(defaultValue);
+        }
+
+        dateFormat = field.DateFormat || "DateOnly";
+        defaultDayOfWeek = (await this._spService.getRegionalWebSettings()).FirstDayOfWeek;
+      }
+
+      // Setup Thumbnail, Location and Boolean fields
+      if (field.FieldType === "Thumbnail") {
+        if (defaultValue) {
+          defaultValue = JSON.parse(defaultValue).serverRelativeUrl;
+        }
+        if (value) {
+          value = JSON.parse(value).serverRelativeUrl;
+        }
+      }
+      if (field.FieldType === "Location") {
+        if (defaultValue) defaultValue = JSON.parse(defaultValue);
+        if (value) value = JSON.parse(value);
+      }
+      if (field.FieldType === "Boolean") {
+        if (defaultValue !== undefined && defaultValue !== null) defaultValue = Boolean(Number(defaultValue));
+        if (value !== undefined && value !== null) value = Boolean(Number(value));
+      }
+
+      const isHidden = field.Hidden || hiddenFields.indexOf(field.InternalName) > -1
+
+      tempFields.push({
+        isHidden,
+        value,
+        newValue: !item && isHidden ? defaultValue : undefined,
+        stringValue,
+        subPropertyValues,
+        cultureName,
+        fieldTermSetId: termSetId,
+        fieldAnchorId: anchorId,
+        options: choices,
+        lookupListID: lookupListId,
+        lookupField: lookupField,
+        // changedValue: defaultValue,
+        fieldType: field.FieldType,
+        // fieldTitle: field.Title,
+        defaultValue: defaultValue,
+        context: this.props.context,
+        disabled: this.props.disabled ||
+          (disabledFields &&
+            disabledFields.indexOf(field.InternalName) > -1),
+        // listId: this.props.listId,
+        columnInternalName: field.InternalName,
+        label: field.Title,
+        onChanged: this.onChange,
+        required: field.Required,
+        hiddenFieldName: hiddenName,
+        Order: order,
+        isRichText: richText,
+        dateFormat: dateFormat,
+        firstDayOfWeek: defaultDayOfWeek,
+        listItemId: listItemId,
+        principalType: principalType,
+        description: field.Description,
+        minimumValue: minValue,
+        maximumValue: maxValue,
+        showAsPercentage: showAsPercentage,
+      });
+
+      // This may not be necessary now using RenderListDataAsStream
+      tempFields.sort((a, b) => a.Order - b.Order);
     }
     return tempFields;
   }

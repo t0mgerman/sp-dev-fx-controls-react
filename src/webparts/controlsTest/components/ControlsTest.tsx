@@ -814,8 +814,8 @@ export default class ControlsTest extends React.Component<IControlsTestProps, IC
     const { controlVisibility } = this.props;
 
     let dynamicFormListItemId:number;
-    if (!isNaN(Number(this.props.dynamicFormListItemId))) {
-      dynamicFormListItemId = Number(this.props.dynamicFormListItemId);
+    if (!isNaN(Number(this.props.dynamicFormSettings?.listItemId))) {
+      dynamicFormListItemId = Number(this.props.dynamicFormSettings?.listItemId);
     }
 
     // Size options for the icon size dropdown
@@ -963,18 +963,19 @@ export default class ControlsTest extends React.Component<IControlsTestProps, IC
         <div id="DynamicFormDiv" className={styles.container} hidden={!controlVisibility.DynamicForm}>
           <div className="ms-font-m">
             <DynamicForm 
-              key={this.props.dynamicFormListId} 
+              key={JSON.stringify(this.props.dynamicFormSettings)} 
               context={this.props.context} 
-              listId={this.props.dynamicFormListId} 
+              listId={this.props.dynamicFormSettings?.listId} 
+              contentTypeId={this.props.dynamicFormSettings?.contentTypeId}
               listItemId={dynamicFormListItemId} 
-              validationErrorDialogProps={this.props.dynamicFormErrorDialogEnabled ? { showDialogOnValidationError: true } : undefined}
+              validationErrorDialogProps={this.props.dynamicFormSettings?.errorDialogEnabled ? { showDialogOnValidationError: true } : undefined}
               returnListItemInstanceOnSubmit={true}
               onCancelled={() => { console.log('Cancelled'); }} 
               onSubmitted={async (data, item) => { let itemdata = await item.get(); console.log('Saved item', itemdata)}}
-              useClientSideValidation={this.props.dynamicFormClientSideValidationEnabled}
-              useFieldValidation={this.props.dynamicFormFieldValidationEnabled}
-              useCustomFormatting={this.props.dynamicFormCustomFormattingEnabled}
-              enableFileSelection={this.props.dynamicFormFileSelectionEnabled}
+              useClientSideValidation={this.props.dynamicFormSettings?.clientSideValidationEnabled}
+              useFieldValidation={this.props.dynamicFormSettings?.fieldValidationEnabled}
+              useCustomFormatting={this.props.dynamicFormSettings?.customFormattingEnabled}
+              enableFileSelection={this.props.dynamicFormSettings?.fileSelectionEnabled}
             />
           </div>
         </div>
