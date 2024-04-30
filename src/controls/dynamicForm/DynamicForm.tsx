@@ -368,8 +368,8 @@ export class DynamicForm extends React.Component<
         }
 
         // Check min and max values for number fields
-        if (field.fieldType === "Number" && field.newValue !== undefined && field.newValue.trim() !== "") {
-          if ((field.newValue < field.minimumValue) || (field.newValue > field.maximumValue)) {
+        if (field.fieldType === "Number" && field.newValue !== undefined && field.newValue.toString().trim() !== "") {
+          if ((Number(field.newValue) < field.minimumValue) || (Number(field.newValue) > field.maximumValue)) {
             shouldBeReturnBack = true;
           }
         }
@@ -423,7 +423,7 @@ export class DynamicForm extends React.Component<
           columnInternalName,
           hiddenFieldName,
         } = field;
-        if (field.newValue !== null && field.newValue !== undefined) {
+        if (field.newValue !== undefined) {
 
           let value = field.newValue;
           if (["Lookup", "LookupMulti", "User", "UserMulti"].indexOf(fieldType) < 0) {
@@ -433,7 +433,7 @@ export class DynamicForm extends React.Component<
           // Choice fields
 
           if (fieldType === "Choice") {
-            objects[columnInternalName] = field.newValue.key;
+            objects[columnInternalName] = field.newValue?.key;
           }
           if (fieldType === "MultiChoice") {
             objects[columnInternalName] = { results: field.newValue };
@@ -450,9 +450,11 @@ export class DynamicForm extends React.Component<
           }
           if (fieldType === "LookupMulti") {
             value = [];
-            field.newValue.forEach((element) => {
-              value.push(element.key);
-            });
+            if (field.newValue !== null) {
+              field.newValue.forEach((element) => {
+                value.push(element.key);
+              });
+            }
             objects[`${columnInternalName}Id`] = {
               results: value.length === 0 ? null : value,
             };
@@ -461,11 +463,11 @@ export class DynamicForm extends React.Component<
           // User fields
 
           if (fieldType === "User") {
-            objects[`${columnInternalName}Id`] = field.newValue.length === 0 ? null : field.newValue;
+            objects[`${columnInternalName}Id`] = field.newValue?.length === 0 ? null : field.newValue;
           }
           if (fieldType === "UserMulti") {
             objects[`${columnInternalName}Id`] = {
-              results: field.newValue.length === 0 ? null : field.newValue,
+              results: field.newValue?.length === 0 ? null : field.newValue,
             };
           }
 
@@ -1139,7 +1141,8 @@ export class DynamicForm extends React.Component<
       const selectedTags: any = [];
 
       // If a SharePoint Item was loaded, get the field value from it
-      if (item !== null && item[field.InternalName]) {
+      // eslint-disable-next-line eqeqeq
+      if (item !== null && item[field.InternalName] != null) {
         value = item[field.InternalName];
         stringValue = value.toString();
       } else {
