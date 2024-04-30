@@ -14,10 +14,10 @@ import {
   DialogType,
 } from "@fluentui/react/lib/Dialog";
 import { IDropdownOption } from "@fluentui/react/lib/Dropdown";
+import { Icon } from "@fluentui/react/lib/Icon";
 import { MessageBar, MessageBarType } from "@fluentui/react/lib/MessageBar";
 import { ProgressIndicator } from "@fluentui/react/lib/ProgressIndicator";
 import { IStackTokens, Stack } from "@fluentui/react/lib/Stack";
-import { Icon } from "@fluentui/react/lib/components/Icon/Icon";
 import { DynamicField } from "./dynamicField";
 import {
   DateFormat,
@@ -149,7 +149,7 @@ export class DynamicForm extends React.Component<
    */
   public render(): JSX.Element {
     const { customFormatting, fieldCollection, hiddenByFormula, infoErrorMessages, isSaving } = this.state;
-    
+
     const customFormattingDisabled = this.props.useCustomFormatting === false;
 
     // Custom Formatting - Header
@@ -178,7 +178,7 @@ export class DynamicForm extends React.Component<
       footerContent = this._customFormatter.renderCustomFormatContent(customFormatting.footer, this.getFormValuesForValidation(), true) as JSX.Element;
     }
 
-    // Content Type 
+    // Content Type
     let contentTypeId = this.props.contentTypeId;
     if (this.state.contentTypeId !== undefined) contentTypeId = this.state.contentTypeId;
 
@@ -297,8 +297,7 @@ export class DynamicForm extends React.Component<
         field.columnInternalName
       )
     ) {
-      field.disabled = field.disabled || isSaving;
-      return fieldOverrides[field.columnInternalName](field);
+      return fieldOverrides[field.columnInternalName]({ ...field,disabled: field.disabled || isSaving} )
     }
 
     // Default render
@@ -312,7 +311,7 @@ export class DynamicForm extends React.Component<
     );
   }
 
-  private updateFormMessages(type: MessageBarType, message: string): void { 
+  private updateFormMessages(type: MessageBarType, message: string): void {
     const { infoErrorMessages } = this.state;
     const newMessages = infoErrorMessages.slice();
     newMessages.push({ type, message });
@@ -331,7 +330,7 @@ export class DynamicForm extends React.Component<
       validationErrorDialogProps,
       returnListItemInstanceOnSubmit
     } = this.props;
-    
+
     let contentTypeId = this.props.contentTypeId;
     if (this.state.contentTypeId !== undefined) contentTypeId = this.state.contentTypeId;
 
@@ -420,13 +419,18 @@ export class DynamicForm extends React.Component<
         const {
           fieldType,
           additionalData,
-          columnInternalName,
           hiddenFieldName,
         } = field;
+        let { columnInternalName } = field;
+        
+        if (columnInternalName.startsWith('_x') || columnInternalName.startsWith('_')) {
+          columnInternalName = `OData_${columnInternalName}`;
+        }
         if (field.newValue !== undefined) {
 
           let value = field.newValue;
-          if (["Lookup", "LookupMulti", "User", "UserMulti"].indexOf(fieldType) < 0) {
+          
+          if (["Lookup", "LookupMulti", "User", "UserMulti", "TaxonomyFieldTypeMulti"].indexOf(fieldType) < 0) {
             objects[columnInternalName] = value;
           }
 
@@ -504,7 +508,7 @@ export class DynamicForm extends React.Component<
             } else {
               objects[columnInternalName] = null;
             }
-          } 
+          }
         }
       }
 
@@ -628,7 +632,7 @@ export class DynamicForm extends React.Component<
           }
           console.log("Error", error);
         }
-      } 
+      }
 
       this.setState({
         isSaving: false,
@@ -659,7 +663,7 @@ export class DynamicForm extends React.Component<
       returnListItemInstanceOnSubmit
     } = this.props;
 
-    
+
     if (selectedFile !== undefined) {
         try {
           const idField = "ID";
@@ -673,14 +677,14 @@ export class DynamicForm extends React.Component<
                 "_"
               ) // Replace not allowed chars in folder name
               : ""; // Empty string will be replaced by SPO with Folder Item ID
-    
+
           const fileCreatedResult = await library.rootFolder.files.addChunked(encodeURI(itemTitle), await selectedFile.downloadFileContent());
           const fields = await fileCreatedResult.file.listItemAllFields();
-    
+
           if (fields[idField]) {
             // Read the ID of the just created folder or Document Set
             const folderId = fields[idField];
-    
+
             // Set the content type ID for the target item
             objects[contentTypeIdField] = contentTypeId;
             // Update the just created folder or Document Set
@@ -811,7 +815,7 @@ export class DynamicForm extends React.Component<
       fieldCollection: fieldCol,
       validationErrors
     }, () => {
-      if (validate) this.performValidation(); 
+      if (validate) this.performValidation();
     });
   };
 
@@ -848,7 +852,7 @@ export class DynamicForm extends React.Component<
    * @param formulas A Record / dictionary-like object, where key is internal column name and value is an object with ValidationFormula and ValidationMessage properties
    * @param returnMessages Determines whether a Record of error messages is returned or an array of column names that have failed validation
    * @param requireValue Set to true if the formula should only be evaluated when the field has a value
-   * @returns 
+   * @returns
    */
   private evaluateFormulas = (
     formulas: Record<string, Pick<ISPField, "ValidationFormula" | "ValidationMessage">>,
@@ -880,12 +884,12 @@ export class DynamicForm extends React.Component<
   }
 
   /**
-   * Used for validation. Returns a Record of field values, where key is internal column name and value is the field value. 
+   * Used for validation. Returns a Record of field values, where key is internal column name and value is the field value.
    * Expands certain properties and stores many of them as primitives (strings, numbers or bools) so the expression evaluator
    * can process them. For example: a User column named Person will have values stored as Person, Person.email, Person.title etc.
-   * This is so the expression evaluator can process expressions like '=[$Person.title] == "Contoso Employee 1138"' 
+   * This is so the expression evaluator can process expressions like '=[$Person.title] == "Contoso Employee 1138"'
    * @param fieldCollection Optional. Could be used to compare field values in state with previous state.
-   * @returns 
+   * @returns
    */
   private getFormValuesForValidation = (fieldCollection?: IDynamicFieldProps[]): Context => {
     const { fieldCollection: fieldColFromState } = this.state;
@@ -941,14 +945,15 @@ export class DynamicForm extends React.Component<
       listItemId,
       disabledFields,
       respectETag,
+      customIcons,
       onListItemLoaded,
     } = this.props;
     let contentTypeId = this.props.contentTypeId;
-    
+
     try {
 
       // Fetch form rendering information from SharePoint
-      const listInfo = await this._spService.getListFormRenderInfo(listId);
+      const listInfo = await this._spService.getListFormRenderInfo(listId, this.webURL);
 
       // If no content type ID is provided, use the default (first one in the list)
       if (contentTypeId === undefined || contentTypeId === "") {
@@ -957,7 +962,7 @@ export class DynamicForm extends React.Component<
       const contentTypeName: string = listInfo.ContentTypeIdToNameMap[contentTypeId];
 
       // Fetch additional information about fields from SharePoint
-      const additionalInfo = await this._spService.getAdditionalListFormFieldInfo(listId, contentTypeId);
+      const additionalInfo = await this._spService.getAdditionalListFormFieldInfo(listId, contentTypeId, this.webURL);
       // (Number fields for min and max values, and fields with validation)
       const numberFields = additionalInfo.filter((f) => f.TypeAsString === "Number" || f.TypeAsString === "Currency");
 
@@ -1053,13 +1058,14 @@ export class DynamicForm extends React.Component<
         numberFields,
         listId,
         listItemId,
-        disabledFields
+        disabledFields,
+        customIcons
       );
 
       // Get installed languages for Currency fields
       let installedLanguages: IInstalledLanguageInfo[];
       if (tempFields.filter(f => f.fieldType === "Currency").length > 0) {
-        installedLanguages = await sp.web.regionalSettings.getInstalledLanguages();        
+        installedLanguages = await sp.web.regionalSettings.getInstalledLanguages();
       }
 
       this.setState({
@@ -1106,10 +1112,10 @@ export class DynamicForm extends React.Component<
    * @param listId SharePoint List ID
    * @param listItemId SharePoint List Item ID
    * @param disabledFields Fields that should be disabled due to configuration
-   * @returns 
+   * @returns
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private async buildFieldCollection(listInfo: IRenderListDataAsStreamClientFormResult, contentTypeName: string, item: any, numberFields: ISPField[], listId: string, listItemId: number, disabledFields: string[]): Promise<IDynamicFieldProps[]> {
+  private async buildFieldCollection(listInfo: IRenderListDataAsStreamClientFormResult, contentTypeName: string, item: any, numberFields: ISPField[], listId: string, listItemId: number, disabledFields: string[], customIcons: {[key: string]: string}): Promise<IDynamicFieldProps[]> {
     const tempFields: IDynamicFieldProps[] = [];
     let order: number = 0;
     const hiddenFields = this.props.hiddenFields !== undefined ? this.props.hiddenFields : [];
@@ -1139,6 +1145,11 @@ export class DynamicForm extends React.Component<
       let showAsPercentage: boolean | undefined;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const selectedTags: any = [];
+
+        let fieldName = field.InternalName;
+        if (fieldName.startsWith('_x') || fieldName.startsWith('_')) {
+          fieldName = `OData_${fieldName}`;
+        }
 
       // If a SharePoint Item was loaded, get the field value from it
       // eslint-disable-next-line eqeqeq
@@ -1247,7 +1258,8 @@ export class DynamicForm extends React.Component<
           const response = await this._spService.getSingleManagedMetadataLabel(
             listId,
             listItemId,
-            field.InternalName
+            field.InternalName,
+              this.webURL
           );
           if (response) {
             selectedTags.push({
@@ -1280,16 +1292,16 @@ export class DynamicForm extends React.Component<
             });
           });
 
-          defaultValue = selectedTags;
-        } else {
-          if (defaultValue && defaultValue !== "") {
-            defaultValue.split(/#|;/).forEach((element) => {
-              if (element.indexOf("|") !== -1)
-                selectedTags.push({
-                  key: element.split("|")[1],
-                  name: element.split("|")[0],
-                });
-            });
+            value = selectedTags;
+          } else {
+            if (defaultValue && defaultValue !== "") {
+              defaultValue.split(/#|;/).forEach((element) => {
+                if (element.indexOf("|") !== -1)
+                  selectedTags.push({
+                    key: element.split("|")[1],
+                    name: element.split("|")[0],
+                  });
+              });
 
             value = selectedTags;
             stringValue = selectedTags?.map(dv => dv.key + ';#' + dv.name).join(';#');
@@ -1298,20 +1310,22 @@ export class DynamicForm extends React.Component<
         if (defaultValue === "") defaultValue = null;
       }
 
-      // Setup DateTime fields
-      if (field.FieldType === "DateTime") {
-        if (item !== null && item[field.InternalName]) {
-          value = new Date(item[field.InternalName]);
-          stringValue = value.toISOString();
-        } else if (defaultValue === "[today]") {
-          defaultValue = new Date();
-        } else if (defaultValue) {
-          defaultValue = new Date(defaultValue);
-        }
+        // Setup DateTime fields
+        if (field.FieldType === "DateTime") {
 
-        dateFormat = field.DateFormat || "DateOnly";
-        defaultDayOfWeek = (await this._spService.getRegionalWebSettings()).FirstDayOfWeek;
-      }
+          if (item !== null && item[fieldName]) {
+
+            value = new Date(item[fieldName]);
+            stringValue = value.toISOString();
+          } else if (defaultValue === "[today]") {
+            defaultValue = new Date();
+          } else if (defaultValue) {
+            defaultValue = new Date(defaultValue);
+          }
+
+          dateFormat = field.DateFormat || "DateOnly";
+          defaultDayOfWeek = (await this._spService.getRegionalWebSettings(this.webURL)).FirstDayOfWeek;
+        }
 
       // Setup Thumbnail, Location and Boolean fields
       if (field.FieldType === "Thumbnail") {
@@ -1369,6 +1383,7 @@ export class DynamicForm extends React.Component<
         minimumValue: minValue,
         maximumValue: maxValue,
         showAsPercentage: showAsPercentage,
+          customIcon: customIcons ? customIcons[field.InternalName] : undefined
       });
 
       // This may not be necessary now using RenderListDataAsStream
@@ -1401,7 +1416,8 @@ export class DynamicForm extends React.Component<
         listItemId,
         file.fileName,
         buffer,
-        undefined
+        undefined,
+        this.webURL
       );
     }
   };

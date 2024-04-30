@@ -41,10 +41,6 @@ export class RichText extends React.Component<IRichTextProps, IRichTextState> {
   private _richTextId = undefined;
 
   private ddStyleOpts = [{
-    key: 0,
-    text: strings.HeaderNormalText,
-    data: {}
-  }, {
     key: 2,
     text: strings.HeaderH2,
     data:
@@ -59,6 +55,10 @@ export class RichText extends React.Component<IRichTextProps, IRichTextState> {
     text: strings.HeaderH4,
     data:
       { className: styles.toolbarButtonH4 }
+  }, {
+    key: 0,
+    text: strings.HeaderNormalText,
+    data: { className: styles.toolbarButtonNormal }
   }, {
     key: 7,
     text: strings.HeaderBlockQuote,
@@ -467,7 +467,7 @@ export class RichText extends React.Component<IRichTextProps, IRichTextState> {
     }
 
     // Okay, we're in edit mode.
-    const { placeholder, styleOptions: { showStyles, showBold, showItalic, showUnderline, showAlign, showList, showLink, showMore, showImage } } = this.props;
+    const { placeholder,style, styleOptions: { showStyles, showBold, showItalic, showUnderline, showAlign, showList, showLink, showMore, showImage } } = this.props;
 
     // Get a unique id for the toolbar
     const modules = {
@@ -511,11 +511,12 @@ export class RichText extends React.Component<IRichTextProps, IRichTextState> {
       'xxlarge',
       'xxxlarge',
       'xxlargeplus',
-      'super'];
+      'super',
+      'superlarge'];
     ReactQuillInstance.register(sizeClass, true);
 
     return (
-      <div ref={(ref) => { this._wrapperRef = ref; }} className={css(styles.richtext && this.state.editing ? 'ql-active' : null, this.props.className || null) || null}>
+      <div ref={(ref) => { this._wrapperRef = ref; }} className={css(styles.richtext && this.state.editing ? 'ql-active' : null, this.props.className || null) || null} style={style}>
         {renderLabel}
         <div id={this._toolbarId} style={{ top: this.state.wrapperTop }}>
           {
